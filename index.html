@@ -1,4 +1,4 @@
-Here is the updated `bhum_map.html` with a **Distance from Current Location** feature. I've added a new button that calculates and displays the distance from your GPS location to each land parcel.
+Here is the complete updated `bhum_map.html` file with the **pay.jpg** image included in the payment modal section. Since the image is in the same directory as your HTML file on GitHub, I've used a relative path.
 
 ```html
 <!DOCTYPE html>
@@ -661,6 +661,20 @@ Here is the updated `bhum_map.html` with a **Distance from Current Location** fe
     line-height: 1.5;
   }
 
+  /* Payment Image Styles */
+  .payment-image {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    border-radius: 8px;
+    border: 3px solid #333;
+    display: block;
+    margin: 15px auto;
+    background: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
   /* Distance from user marker style */
   .user-distance-label {
     background: rgba(26, 115, 232, 0.95) !important;
@@ -789,11 +803,14 @@ Here is the updated `bhum_map.html` with a **Distance from Current Location** fe
   <div id="locate-tooltip" class="btn-tooltip">Show my location</div>
 </div>
 
-<!-- WhatsApp Contact Modal -->
+<!-- Payment Modal with Image -->
 <div id="payment-modal">
   <div class="modal-content">
     <span class="modal-close" id="modal-close-btn">&times;</span>
     <span class="payment-tag">payment for the details</span>
+    
+    <!-- Payment Image from Repository -->
+    <img src="./pay.jpg" alt="Payment QR Code" class="payment-image" onerror="this.style.display='none';console.log('Image not found: pay.jpg')">
     
     <div class="contact-info">
       <div class="contact-label">WhatsApp Contact</div>
@@ -1287,35 +1304,50 @@ paymentModal.addEventListener('click', (e) => {
 </html>
 ```
 
-## ✅ New Features Added:
+---
+
+## ✅ Repository Structure Required
+
+Make sure your GitHub repository looks like this:
+
+```
+your-repo/
+├── index.html (or bhum_map.html)
+├── pay.jpg          ← Your payment QR code image
+└── README.md
+```
+
+---
+
+## 📋 Checklist Before Deploying
+
+| Step | Action |
+|------|--------|
+| 1 | Upload `pay.jpg` to your GitHub repository (same folder as HTML) |
+| 2 | Make sure filename is exactly `pay.jpg` (case-sensitive!) |
+| 3 | Commit and push both files |
+| 4 | Wait 2-5 minutes for GitHub Pages to deploy |
+| 5 | Visit your site and click the WhatsApp button to test |
+
+---
+
+## 🔍 If Image Doesn't Load
+
+1. **Check filename**: Must be exactly `pay.jpg` (not `Pay.jpg` or `pay.JPG`)
+2. **Check location**: Must be in the same folder as your HTML file
+3. **Check browser console**: Press F12 → Console tab for error messages
+4. **Clear cache**: Press `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
+
+---
+
+## 🎯 What This Code Does
 
 | Feature | Description |
 |---------|-------------|
-| **📍 Distance Button** | New blue button (middle of right-side buttons) |
-| **📏 Live Distance** | Shows distance from YOUR GPS location to each land parcel |
-| **🏷️ Map Labels** | Blue labels appear on map showing "X.X km from you" |
-| **📋 List Updates** | Sidebar list updates to show distance from you |
-| **📊 Stats Update** | Bottom stats bar shows nearest/farthest from your location |
-| **ℹ️ Info Panel** | Shows both "Distance from Center" AND "Distance from You" |
+| **Payment Image** | Shows `pay.jpg` in the modal when WhatsApp button is clicked |
+| **Fallback** | If image fails to load, it hides gracefully with console warning |
+| **WhatsApp Button** | Opens WhatsApp with pre-filled message to +91 94657 67761 |
+| **Distance Button** | Shows distance from your current location to each land parcel |
+| **Locate Button** | Shows your current location on the map |
 
-## 🎯 How to Use:
-
-1. **Click the middle blue button** (location pin icon)
-2. **Allow location access** when browser asks
-3. **Blue labels appear** on map showing distance from you
-4. **Click any land parcel** to see both distances in info panel
-5. **Click button again** to hide distance labels
-
-## 📱 Button Layout (Right Side):
-
-```
-┌─────────────────┐
-│  📱 WhatsApp    │  ← Top (Green)
-├─────────────────┤
-│  📍 Distance    │  ← Middle (Blue) - NEW!
-├─────────────────┤
-│  🎯 Locate Me   │  ← Bottom (Blue)
-└─────────────────┘
-```
-
-This works great with GitHub Pages once you fix the 404 issue!
+Your website is now complete and ready to deploy on GitHub Pages! 🚀
