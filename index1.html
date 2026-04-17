@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BHUM — Land Intelligence Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- Google Maps Mutant for Leaflet -->
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.7.0/Leaflet.GoogleMutant.js"></script>
+<style>
+  :root {
+    --ink: #ffffff;
+    --paper: #f5f0e8;
+    --gold: #c8a84b;
+    --gold-light: #e8c96a;
+    --rust: #c45c2a;
+    --sage: #3d6b4f;
+    --muted: #8a8070;
+    --panel: rgba(0,0,0,0.96);
+    --line-color: rgba(200,168,75,0.7);
+    --whatsapp: #25D366;
+    --blue: #1a73e8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--ink);
+    color: var(--paper);
+    height: 100vh;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* Header */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    padding: 12px 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.15em;
+    color: #c8a84b;
+    text-transform: uppercase;
+  }
+
+  .logo span {
+    color: #333333;
+    opacity: 0.6;
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    margin-left: 10px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  #point-count {
+    font-size: 11px;
+    color: #666666;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* Map */
+  #map {
+    width: 100%;
+    height: 100vh;
+  }
+
+  /* Legend / Sidebar */
+  #sidebar {
+    position: fixed;
+    top: 60px;
+    left: 16px;
+    bottom: 16px;
+    width: 280px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  #sidebar.hidden {
+    transform: translateX(-310px);
+    opacity: 0;
+    pointer-events: none !important;
+  }
+
+  /* Sidebar Toggle Button */
+  #sidebar-toggle {
+    position: fixed;
+    top: 70px;
+    left: 16px;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: all 0.2s;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #sidebar-toggle.show {
+    opacity: 1;
+    pointer-events: all;
+    left: 16px;
+  }
+
+  #sidebar-toggle:hover {
+    background: #f0f4ff;
+    border-color: #1a73e8;
+    box-shadow: 0 4px 12px rgba(26,115,232,0.25);
+  }
+
+  #sidebar-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: #333;
+    transition: fill 0.2s;
+  }
+  #sidebar-toggle:hover svg { fill: #1a73e8; }
+
+  #legend-box {
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 14px 16px;
+    pointer-events: all;
+  }
+
+  #legend-box h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #000000;
+    margin-bottom: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 7px;
+    font-size: 11px;
+    color: #333333;
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Point list */
+  #point-list {
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    flex: 1;
+    overflow-y: auto;
+    pointer-events: all;
+  }
+
+  #point-list::-webkit-scrollbar { width: 4px; }
+  #point-list::-webkit-scrollbar-track { background: transparent; }
+  #point-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+  #point-list h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #000000;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    background: #ffffff;
+  }
+
+  .list-item {
+    padding: 9px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.15s;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .list-item:hover {
+    background: #f5f5f5;
+  }
+
+  .list-item.active {
+    background: #fff8e8;
+    border-left: 2px solid #c8a84b;
+  }
+
+  .list-item-name {
+    font-size: 10px;
+    line-height: 1.5;
+    color: #111111;
+  }
+
+  .list-item-dist {
+    font-size: 9px;
+    color: #000000;
+    font-weight: 700;
+    white-space: nowrap;
+    padding-top: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Info panel (popup replacement) */
+  #info-panel {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 340px;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 0;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  #info-panel.visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  #info-panel-header {
+    background: #f5f5f5;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  #info-panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #000000;
+    line-height: 1.3;
+    flex: 1;
+    padding-right: 10px;
+  }
+
+  #info-close {
+    width: 22px; height: 22px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: transparent;
+    color: #555;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  #info-close:hover { color: #000; border-color: #000; }
+
+  #info-panel-body {
+    padding: 14px 16px;
+  }
+
+  .info-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+
+  .info-label {
+    color: #555555;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 9px;
+    min-width: 80px;
+    padding-top: 2px;
+  }
+
+  .info-value {
+    color: #111111;
+    line-height: 1.5;
+  }
+
+  .info-value.highlight {
+    color: #000000;
+    font-weight: 700;
+  }
+
+  /* Custom Leaflet marker styles */
+  .custom-marker {
+    position: relative;
+  }
+
+  .custom-marker-inner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: rgba(200,168,75,0.3);
+    box-shadow: 0 0 8px rgba(200,168,75,0.4);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .custom-marker-inner:hover {
+    transform: scale(1.5);
+    background: var(--gold);
+  }
+
+  .center-marker-inner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid var(--rust);
+    background: rgba(196,92,42,0.5);
+    box-shadow: 0 0 16px rgba(196,92,42,0.6), 0 0 32px rgba(196,92,42,0.2);
+  }
+
+  /* Leaflet overrides */
+  .leaflet-popup-content-wrapper {
+    background: var(--panel) !important;
+    border: 1px solid rgba(200,168,75,0.4) !important;
+    border-radius: 6px !important;
+    color: var(--paper) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+  }
+  .leaflet-popup-tip { background: var(--panel) !important; }
+
+  /* Distance label on lines */
+  .distance-label {
+    background: rgba(20, 20, 20, 0.82) !important;
+    border: 1px solid rgba(200,168,75,0.4) !important;
+    border-radius: 3px !important;
+    color: #e8c96a !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    white-space: nowrap !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5) !important;
+  }
+
+  /* Pulse animation for center */
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(196,92,42,0.7); }
+    70% { box-shadow: 0 0 0 14px rgba(196,92,42,0); }
+    100% { box-shadow: 0 0 0 0 rgba(196,92,42,0); }
+  }
+  .center-pulse { animation: pulse 2s infinite; }
+
+  /* Stats bar */
+  #stats-bar {
+    position: fixed;
+    bottom: 16px;
+    left: 310px;
+    right: 370px;
+    z-index: 900;
+    display: flex;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .stat-pill {
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 10px;
+    color: #333333;
+    letter-spacing: 0.1em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .stat-pill strong { color: #000000; }
+
+  /* --- RIGHT SIDE BUTTONS --- */
+  #right-buttons {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Locate Me Button */
+  #locate-btn {
+    background: #ffffff;
+    border: 2px solid #1a73e8;
+    border-radius: 8px;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    transition: all 0.2s;
+    padding: 0;
+  }
+  #locate-btn:hover {
+    background: #e8f0fe;
+    box-shadow: 0 4px 16px rgba(26,115,232,0.3);
+    transform: scale(1.05);
+  }
+  #locate-btn svg {
+    width: 20px; height: 20px;
+    fill: #1a73e8;
+  }
+  #locate-btn.locating svg {
+    animation: spin 1s linear infinite;
+  }
+  #locate-btn.located {
+    border-color: #34a853;
+    background: #e6f4ea;
+  }
+  #locate-btn.located svg { fill: #34a853; }
+  #locate-btn.error {
+    border-color: #ea4335;
+    background: #fce8e6;
+  }
+  #locate-btn.error svg { fill: #ea4335; }
+
+  /* Distance Button */
+  #distance-btn {
+    background: #ffffff;
+    border: 2px solid #1a73e8;
+    border-radius: 8px;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    transition: all 0.2s;
+    padding: 0;
+  }
+  #distance-btn:hover {
+    background: #e8f0fe;
+    box-shadow: 0 4px 16px rgba(26,115,232,0.3);
+    transform: scale(1.05);
+  }
+  #distance-btn svg {
+    width: 20px; height: 20px;
+    fill: #1a73e8;
+  }
+  #distance-btn.active {
+    background: #1a73e8;
+    border-color: #1a73e8;
+  }
+  #distance-btn.active svg {
+    fill: #ffffff;
+  }
+
+  /* WhatsApp/Payment Button */
+  #payment-btn {
+    background: #25D366;
+    border: 2px solid #25D366;
+    border-radius: 8px;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    transition: all 0.2s;
+    padding: 0;
+  }
+  #payment-btn:hover {
+    background: #128C7E;
+    border-color: #128C7E;
+    box-shadow: 0 4px 16px rgba(37, 211, 102, 0.3);
+    transform: scale(1.05);
+  }
+  #payment-btn svg {
+    width: 22px; height: 22px;
+    fill: #ffffff;
+  }
+
+  /* Tooltips */
+  .btn-tooltip {
+    position: fixed;
+    right: 64px;
+    z-index: 1001;
+    background: #333;
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  #locate-btn:hover + #locate-tooltip { opacity: 1; }
+  #distance-btn:hover + #distance-tooltip { opacity: 1; }
+  #payment-btn:hover + #payment-tooltip { opacity: 1; }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Modal Overlay */
+  #payment-modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(4px);
+  }
+  #payment-modal.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  
+  /* Modal Content */
+  .modal-content {
+    background: #111;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    border: 1px solid #333;
+    max-width: 90%;
+    width: 350px;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #payment-modal.active .modal-content {
+    transform: translateY(0);
+  }
+  
+  .modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .modal-close:hover { color: #fff; }
+
+  .payment-tag {
+    color: #c8a84b;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 15px;
+    display: block;
+  }
+
+  /* WhatsApp Contact Styles */
+  .contact-info {
+    margin: 20px 0;
+  }
+
+  .contact-label {
+    color: #888;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 8px;
+  }
+
+  .contact-number {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 20px;
+  }
+
+  .whatsapp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #25D366;
+    color: #fff;
+    text-decoration: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .whatsapp-btn:hover {
+    background: #128C7E;
+    transform: scale(1.02);
+  }
+
+  .whatsapp-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: #fff;
+  }
+
+  .contact-note {
+    color: #666;
+    font-size: 9px;
+    margin-top: 15px;
+    line-height: 1.5;
+  }
+
+  /* Payment Image Styles */
+  .payment-image {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    border-radius: 8px;
+    border: 3px solid #333;
+    display: block;
+    margin: 15px auto;
+    background: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  /* Distance from user marker style */
+  .user-distance-label {
+    background: rgba(15, 40, 80, 0.88) !important;
+    border: 1px solid rgba(26,115,232,0.6) !important;
+    border-radius: 3px !important;
+    color: #7ab8ff !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+    white-space: nowrap !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5) !important;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <div class="logo">BHUM <span>// LAND INTELLIGENCE MAP</span></div>
+  </div>
+  <div id="point-count">32 LOCATIONS · SHAHDOL · UMARIA · ANUPPUR · MP</div>
+</div>
+
+<div id="map"></div>
+
+<!-- Sidebar toggle (visible when sidebar is hidden) -->
+<button id="sidebar-toggle" title="Show sidebar">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+  </svg>
+</button>
+
+<div id="sidebar">
+  <div id="legend-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin-bottom:0">Map Legend</h3>
+      <button id="sidebar-hide-btn" title="Hide sidebar" style="
+        background:none;border:1.5px solid #ddd;border-radius:6px;
+        width:26px;height:26px;cursor:pointer;display:flex;align-items:center;
+        justify-content:center;padding:0;transition:all 0.2s;pointer-events:all;
+      " onmouseover="this.style.borderColor='#1a73e8';this.style.background='#f0f4ff'"
+         onmouseout="this.style.borderColor='#ddd';this.style.background='none'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#555">
+          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#c45c2a;box-shadow:0 0 6px rgba(196,92,42,0.6)"></div>
+      <span>Center of City</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:rgba(200,168,75,0.5);border:2px solid #c8a84b"></div>
+      <span>Land Parcel / Plot</span>
+    </div>
+    <div class="legend-item" style="align-items:center">
+      <div style="width:24px;height:2px;background:rgba(200,168,75,0.6);flex-shrink:0"></div>
+      <span>Distance from Center</span>
+    </div>
+    <div class="legend-item" style="align-items:center">
+      <div style="width:24px;height:2px;background:rgba(26,115,232,0.6);flex-shrink:0"></div>
+      <span>Distance from You</span>
+    </div>
+  </div>
+  <div id="point-list">
+    <h3>All Locations</h3>
+    <div id="list-container"></div>
+  </div>
+</div>
+
+<div id="info-panel">
+  <div id="info-panel-header">
+    <div id="info-panel-title">—</div>
+    <button id="info-close">×</button>
+  </div>
+  <div id="info-panel-body">
+    <div class="info-row">
+      <div class="info-label">Distance</div>
+      <div class="info-value highlight" id="info-dist">—</div>
+    </div>
+    <div class="info-row" id="info-user-dist-row" style="display:none;">
+      <div class="info-label">From You</div>
+      <div class="info-value highlight" id="info-user-dist" style="color:#1a73e8;">—</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Coordinates</div>
+      <div class="info-value" id="info-coords">—</div>
+    </div>
+    <div class="info-row" id="info-desc-row">
+      <div class="info-label">Details</div>
+      <div class="info-value" id="info-desc">—</div>
+    </div>
+  </div>
+</div>
+
+<div id="stats-bar">
+  <div class="stat-pill">Nearest: <strong id="stat-nearest">—</strong></div>
+  <div class="stat-pill">Farthest: <strong id="stat-farthest">—</strong></div>
+  <div class="stat-pill">Avg distance: <strong id="stat-avg">—</strong></div>
+</div>
+
+<!-- Right Side Buttons Container -->
+<div id="right-buttons">
+  <!-- WhatsApp/Payment Button -->
+  <button id="payment-btn" title="Contact for details">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+    </svg>
+  </button>
+  <div id="payment-tooltip" class="btn-tooltip">Contact for details</div>
+
+  <!-- Distance from Current Location Button -->
+  <button id="distance-btn" title="Show distance from your location">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+    </svg>
+  </button>
+  <div id="distance-tooltip" class="btn-tooltip">Distance from you</div>
+
+  <!-- Locate Me Button -->
+  <button id="locate-btn" title="Show my location">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+    </svg>
+  </button>
+  <div id="locate-tooltip" class="btn-tooltip">Show my location</div>
+</div>
+
+<!-- Payment Modal with Image -->
+<div id="payment-modal">
+  <div class="modal-content">
+    <span class="modal-close" id="modal-close-btn">&times;</span>
+    <span class="payment-tag">payment for the details</span>
+    
+    <!-- Payment Image from Repository -->
+    <img src="./pay.jpg" alt="Payment QR Code" class="payment-image" onerror="this.style.display='none';console.log('Image not found: pay.jpg')">
+    
+    <div class="contact-info">
+      <div class="contact-label">WhatsApp Contact</div>
+      <div class="contact-number">+91 94657 67761</div>
+      
+      <a href="https://wa.me/919465767761?text=Hello,%20I%20am%20interested%20in%20land%20details%20from%20BHUM%20Map" 
+         class="whatsapp-btn" 
+         target="_blank" 
+         rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+        </svg>
+        Chat on WhatsApp
+      </a>
+      
+      <div class="contact-note">
+        Click the button above to open WhatsApp<br>
+        and message for land details & pricing
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Google Maps API Script with YOUR API Key -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB9Nu6dci6SiL-rlZ3otg0V3Wt76bECWJ8&callback=initMap" async defer></script>
+
+<script>
+const points = [
+  { id: 1, name: "shivam colony 1300", desc: "area 62*53 rate 1300 per swuare feet", lon: 81.371583, lat: 23.307333, dist: 1.80 },
+  { id: 2, name: "plot nigam colony 800", desc: "800 rate per sq feet", lon: 81.344000, lat: 23.312972, dist: 1.54 },
+  { id: 3, name: "land 1700 sq ft", desc: "", lon: 81.373444, lat: 23.308889, dist: 2.03 },
+  { id: 4, name: "kamla nagar 1300", desc: "60*95", lon: 81.385417, lat: 23.299833, dist: 3.37 },
+  { id: 5, name: "ward no 24 1700", desc: "40*78", lon: 81.374917, lat: 23.291750, dist: 2.62 },
+  { id: 6, name: "land 1200", desc: "48 50 · 40 60 · land", lon: 81.381722, lat: 23.292417, dist: 3.24 },
+  { id: 7, name: "kotma 800", desc: "40*50", lon: 81.385167, lat: 23.318722, dist: 3.62 },
+  { id: 8, name: "bakeli near nahar 10l acre", desc: "10 lakh acre · 5 acre adivashi land", lon: 81.335528, lat: 23.380583, dist: 8.66 },
+  { id: 9, name: "bakeli land 10l acre", desc: "gupta land 8 acre · ASKING 10 l acre", lon: 81.301722, lat: 23.403583, dist: 12.45 },
+  { id: 10, name: "shivam colony gali no 1 1300", desc: "60*40 land", lon: 81.371917, lat: 23.311389, dist: 1.95 },
+  { id: 11, name: "kalyanpur 600", desc: "koillary land sold 580 · asking price 600 · land 30*60 · govt rate 390", lon: 81.339556, lat: 23.300222, dist: 1.86 },
+  { id: 12, name: "bti colony 1000", desc: "land plotting · one owner", lon: 81.346611, lat: 23.308639, dist: 1.06 },
+  { id: 13, name: "chatbai land 6l acre", desc: "2 acre just ahead of jungle · hard land not for agriculture", lon: 81.347500, lat: 23.398111, dist: 10.35 },
+  { id: 14, name: "kotma main road 500", desc: "land near road · near medical college · area 40*50 · 2 land", lon: 81.386194, lat: 23.328194, dist: 4.26 },
+  { id: 15, name: "near recycle plant 350", desc: "350 asking price · near recycle plant · near ayurvedic college new under construction", lon: 81.380722, lat: 23.337417, dist: 4.54 },
+  { id: 16, name: "near odri village madhe 2l acre", desc: "near odri village madha · just beside mountain · one seller 8 owner from Bihar · 2-2.5 l acre", lon: 81.274278, lat: 23.415639, dist: 15.22 },
+  { id: 17, name: "khelmaniya land 17l 5acre", desc: "government land · anudaan ki zameen · 17 lakh for 5 acre · listing shows tribe land · near dam", lon: 81.331806, lat: 23.161333, dist: 16.18 },
+  { id: 18, name: "deogawan land 180", desc: "deogawan land near recycle plant · 2.5 km from ayurvedic college · land 75*200 · ancestral land", lon: 81.381583, lat: 23.351583, dist: 5.91 },
+  { id: 19, name: "khelmaniya road 50l 1.5 acre", desc: "1.5 acre land ready farm house · asking 50l · beside jungle", lon: 81.300806, lat: 23.240417, dist: 9.41 },
+  { id: 20, name: "sdl to patpariya road 5l acre", desc: "3 acre land · 5 l acre near jungle · near mountain · patpariya village road", lon: 81.287083, lat: 23.242167, dist: 10.33 },
+  { id: 21, name: "CENTER of CITY", desc: "Reference center point", lon: 81.355521, lat: 23.305189, dist: 0, isCenter: true },
+  { id: 22, name: "amilia 10Lakh acre", desc: "land 1 acre sellable out of 5 acre", lon: 81.304187, lat: 23.335536, dist: 6.62 },
+  { id: 23, name: "bicharpur near khelgram 350 sq ft", desc: "plot near khelgram", lon: 81.351458, lat: 23.270294, dist: 3.90 },
+  { id: 24, name: "pipariya 3km from sdl 350/250 plotting", desc: "plotting for farm house · pre built plot should be 250", lon: 81.367327, lat: 23.256238, dist: 5.59 },
+  { id: 25, name: "9.5 lakh acre dedvariya pali block", desc: "land 3 acre · 10 lakh acre near grid · no road connectivity · good for solar · dedvariya gram near kalyanpur in pali block", lon: 81.319638, lat: 23.269487, dist: 5.62 },
+  { id: 26, name: "resort in rancha sale 2 acre 50 lakh ST land", desc: "resort to be sold · for ST only · land is ST · in ranch near hill · 4 rooms complete", lon: 80.991901, lat: 23.735001, dist: 62.49 },
+  { id: 27, name: "land rancha 17l acre", desc: "land rancha tala · 17 lac acre sold · 2 acre land", lon: 80.975827, lat: 23.734087, dist: 63.58 },
+  { id: 28, name: "grid location of 10l acre plot didyariya", desc: "this location of grid · plot 10 lakh acre · no proper road · near mped distribution grid · 3 acre land", lon: 81.323537, lat: 23.280586, dist: 4.48 },
+  { id: 29, name: "tigergarh resort to sell 4.5 cr", desc: "tiger garh resort · to be sold for 4.5 cr · small swimming pool · 2 acre land · well built rooms", lon: 80.992780, lat: 23.731106, dist: 62.10 },
+  { id: 30, name: "30l acre land 5acre +3 acre", desc: "30 lakh asking price land · 5 acre + 3 acre · one resort underconstruction · broker friend · this road 4 resort under construction", lon: 81.047287, lat: 23.762527, dist: 61.22 },
+  { id: 31, name: "30l acre manpur panpatha road", desc: "pundit land · friend of broker · 30 lakh acre · 2 acre land", lon: 81.047120, lat: 23.770916, dist: 62.00 },
+  { id: 32, name: "pataur land 25 lakh acre", desc: "land at pataur 1.5 acre · 200*350 · punjabi owner · 25 lakh acer", lon: 81.041324, lat: 23.776863, dist: 62.91 }
+];
+
+const center = points.find(p => p.isCenter);
+
+// Map variables
+let map;
+let googleLayer;
+
+// Initialize Google Map
+function initMap() {
+  // Initialize Leaflet map
+  map = L.map('map', {
+    center: [23.305189, 81.355521],
+    zoom: 10,
+    zoomControl: false
+  });
+
+  // Add Google Maps layer (Roadmap)
+  googleLayer = L.gridLayer.googleMutant({
+    type: 'roadmap'
+  }).addTo(map);
+
+  // Add district overlays
+  addDistrictOverlays();
+
+  // Add markers and lines
+  addMarkersAndLines();
+
+  // Add zoom control
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+}
+
+function addDistrictOverlays() {
+  // District center markers with labels
+  const districtCenters = [
+    { name: 'Shahdol District', lat: 23.305189, lon: 81.355521, color: '#c8a84b' },
+    { name: 'Umaria District', lat: 23.52, lon: 80.84, color: '#1a73e8' },
+    { name: 'Anuppur District', lat: 23.10, lon: 81.69, color: '#34a853' }
+  ];
+
+  districtCenters.forEach(d => {
+    L.circleMarker([d.lat, d.lon], {
+      radius: 38,
+      color: d.color,
+      fillColor: d.color,
+      fillOpacity: 0.07,
+      weight: 2,
+      dashArray: '8,5',
+      interactive: false
+    }).addTo(map);
+
+    L.marker([d.lat, d.lon], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="
+          background:${d.color};
+          color:#fff;
+          font-family:'Space Mono',monospace;
+          font-size:10px;
+          font-weight:700;
+          padding:3px 8px;
+          border-radius:3px;
+          white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.3);
+          letter-spacing:0.08em;
+          opacity:0.92;
+        ">${d.name}</div>`,
+        iconAnchor: [50, -5]
+      }),
+      interactive: false
+    }).addTo(map);
+  });
+}
+
+function addMarkersAndLines() {
+  // Lines + distance labels from center
+  points.filter(p => !p.isCenter).forEach(p => {
+    const latlngs = [[center.lat, center.lon], [p.lat, p.lon]];
+    const line = L.polyline(latlngs, {
+      color: 'rgba(200,168,75,0.85)',
+      weight: 2,
+      dashArray: '5,6',
+      opacity: 0.9
+    }).addTo(map);
+
+    // Midpoint for label
+    const midLat = (center.lat + p.lat) / 2;
+    const midLon = (center.lon + p.lon) / 2;
+    const label = L.marker([midLat, midLon], {
+      icon: L.divIcon({
+        className: 'distance-label',
+        html: `${p.dist.toFixed(1)} km`,
+        iconAnchor: [24, 10]
+      }),
+      interactive: false
+    }).addTo(map);
+
+    // Store for highlight
+    p._line = line;
+    p._label = label;
+  });
+
+  // Markers
+  const markerMap = {};
+  points.forEach(p => {
+    const marker = L.marker([p.lat, p.lon], { icon: makeIcon(p.isCenter) }).addTo(map);
+
+    // Permanent name label always visible
+    marker.bindTooltip(p.name, {
+      permanent: true,
+      direction: 'top',
+      offset: [0, -8],
+      className: 'distance-label'
+    });
+
+    marker.on('click', () => {
+      showInfo(p);
+      map.panTo([p.lat, p.lon], { animate: true, duration: 0.4 });
+    });
+
+    markerMap[p.id] = marker;
+    p._marker = marker;
+  });
+
+  // Sidebar list
+  const listContainer = document.getElementById('list-container');
+  const nonCenter = points.filter(p => !p.isCenter).sort((a,b) => a.dist - b.dist);
+
+  // Center first
+  const centerItem = document.createElement('div');
+  centerItem.className = 'list-item';
+  centerItem.id = `list-item-${center.id}`;
+  centerItem.innerHTML = `
+    <div class="list-item-name" style="color:#c45c2a;font-weight:700">⊕ CENTER OF CITY</div>
+    <div class="list-item-dist" style="color:#000000">0 km</div>
+  `;
+  centerItem.addEventListener('click', () => {
+    showInfo(center);
+    map.panTo([center.lat, center.lon], { animate: true, duration: 0.4 });
+  });
+  listContainer.appendChild(centerItem);
+
+  nonCenter.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.id = `list-item-${p.id}`;
+    item.innerHTML = `
+      <div class="list-item-name">${p.name}</div>
+      <div class="list-item-dist">${p.dist.toFixed(1)} km</div>
+    `;
+    item.addEventListener('click', () => {
+      showInfo(p);
+      map.panTo([p.lat, p.lon], { animate: true, duration: 0.4 });
+    });
+    listContainer.appendChild(item);
+  });
+
+  // Stats
+  const dists = nonCenter.map(p => p.dist);
+  const nearest = nonCenter.reduce((a,b) => a.dist < b.dist ? a : b);
+  const farthest = nonCenter.reduce((a,b) => a.dist > b.dist ? a : b);
+  const avg = dists.reduce((a,b)=>a+b,0)/dists.length;
+
+  document.getElementById('stat-nearest').textContent = `${nearest.dist.toFixed(1)} km`;
+  document.getElementById('stat-farthest').textContent = `${farthest.dist.toFixed(1)} km`;
+  document.getElementById('stat-avg').textContent = `${avg.toFixed(1)} km`;
+}
+
+// Marker icons
+function makeIcon(isCenter) {
+  const size = isCenter ? 22 : 14;
+  const innerClass = isCenter ? 'center-marker-inner center-pulse' : 'custom-marker-inner';
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `<div class="${innerClass}"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
+  });
+}
+
+// --- DISTANCE CALCULATION ---
+let userLocation = null;
+let distanceMode = false;
+let userDistanceLabels = {};
+
+// Haversine formula to calculate distance between two points
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Update distance labels on map
+function updateUserDistanceLabels() {
+  // Clear existing labels
+  Object.values(userDistanceLabels).forEach(label => map.removeLayer(label));
+  userDistanceLabels = {};
+
+  if (!userLocation) return;
+
+  // Add distance label for each point
+  points.filter(p => !p.isCenter).forEach(p => {
+    const dist = calculateDistance(userLocation.lat, userLocation.lon, p.lat, p.lon);
+    p.userDist = dist;
+
+    const label = L.marker([p.lat, p.lon], {
+      icon: L.divIcon({
+        className: 'user-distance-label',
+        html: `${dist.toFixed(1)} km from you`,
+        iconAnchor: [60, -8]
+      }),
+      interactive: false
+    }).addTo(map);
+
+    userDistanceLabels[p.id] = label;
+  });
+
+  // Update list items with user distance
+  document.querySelectorAll('.list-item').forEach(item => {
+    const id = parseInt(item.id.replace('list-item-', ''));
+    const point = points.find(p => p.id === id);
+    if (point && point.userDist !== undefined) {
+      const distEl = item.querySelector('.list-item-dist');
+      if (distEl) {
+        distEl.textContent = `${point.userDist.toFixed(1)} km`;
+        distEl.style.color = '#1a73e8';
+      }
+    }
+  });
+
+  // Update stats
+  const nonCenter = points.filter(p => !p.isCenter && p.userDist !== undefined);
+  if (nonCenter.length > 0) {
+    const nearest = nonCenter.reduce((a,b) => a.userDist < b.userDist ? a : b);
+    const farthest = nonCenter.reduce((a,b) => a.userDist > b.userDist ? a : b);
+    const avg = nonCenter.reduce((a,b) => a.userDist + b.userDist, 0) / nonCenter.length;
+
+    document.getElementById('stat-nearest').textContent = `${nearest.name.substring(0,15)}... (${nearest.userDist.toFixed(1)} km)`;
+    document.getElementById('stat-farthest').textContent = `${farthest.userDist.toFixed(1)} km`;
+    document.getElementById('stat-avg').textContent = `${avg.toFixed(1)} km`;
+  }
+}
+
+// Toggle distance mode
+function toggleDistanceMode() {
+  distanceMode = !distanceMode;
+  const distanceBtn = document.getElementById('distance-btn');
+  
+  if (distanceMode) {
+    distanceBtn.classList.add('active');
+    distanceBtn.title = 'Hide distance from your location';
+    
+    if (!userLocation) {
+      getUserLocation();
+    } else {
+      updateUserDistanceLabels();
+    }
+  } else {
+    distanceBtn.classList.remove('active');
+    distanceBtn.title = 'Show distance from your location';
+    
+    Object.values(userDistanceLabels).forEach(label => map.removeLayer(label));
+    userDistanceLabels = {};
+    
+    document.querySelectorAll('.list-item').forEach(item => {
+      const id = parseInt(item.id.replace('list-item-', ''));
+      const point = points.find(p => p.id === id);
+      if (point) {
+        const distEl = item.querySelector('.list-item-dist');
+        if (distEl) {
+          distEl.textContent = `${point.dist.toFixed(1)} km`;
+          distEl.style.color = '#000000';
+        }
+      }
+    });
+
+    const nonCenter = points.filter(p => !p.isCenter);
+    const nearest = nonCenter.reduce((a,b) => a.dist < b.dist ? a : b);
+    const farthest = nonCenter.reduce((a,b) => a.dist > b.dist ? a : b);
+    const avg = nonCenter.reduce((a,b) => a.dist + b.dist, 0) / nonCenter.length;
+
+    document.getElementById('stat-nearest').textContent = `${nearest.dist.toFixed(1)} km`;
+    document.getElementById('stat-farthest').textContent = `${farthest.dist.toFixed(1)} km`;
+    document.getElementById('stat-avg').textContent = `${avg.toFixed(1)} km`;
+  }
+}
+
+// Get user location
+function getUserLocation() {
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser');
+    return;
+  }
+
+  const locateBtn = document.getElementById('locate-btn');
+  locateBtn.classList.remove('located', 'error');
+  locateBtn.classList.add('locating');
+  locateBtn.title = 'Locating...';
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLocation = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      };
+
+      if (userMarker) map.removeLayer(userMarker);
+      if (userCircle) map.removeLayer(userCircle);
+
+      userCircle = L.circle([userLocation.lat, userLocation.lon], {
+        radius: userLocation.accuracy,
+        color: '#1a73e8',
+        fillColor: '#1a73e8',
+        fillOpacity: 0.08,
+        weight: 1.5,
+        dashArray: '4,4'
+      }).addTo(map);
+
+      userMarker = L.marker([userLocation.lat, userLocation.lon], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="
+            width:16px;height:16px;
+            background:#1a73e8;
+            border:3px solid #fff;
+            border-radius:50%;
+            box-shadow:0 0 0 2px #1a73e8, 0 2px 8px rgba(0,0,0,0.3);
+          "></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        })
+      }).addTo(map);
+
+      userMarker.bindTooltip('📍 You are here', {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -10],
+        className: 'distance-label'
+      });
+
+      locateBtn.classList.remove('locating');
+      locateBtn.classList.add('located');
+      locateBtn.title = `Located (±${Math.round(userLocation.accuracy)}m)`;
+
+      if (distanceMode) {
+        updateUserDistanceLabels();
+      }
+    },
+    (err) => {
+      locateBtn.classList.remove('locating');
+      locateBtn.classList.add('error');
+      locateBtn.title = err.code === 1 ? 'Permission denied' : 'Location unavailable';
+      setTimeout(() => {
+        locateBtn.classList.remove('error');
+        locateBtn.title = 'Show my location';
+      }, 3000);
+
+      distanceMode = false;
+      document.getElementById('distance-btn').classList.remove('active');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+// Info panel logic
+let activeId = null;
+const infoPanel = document.getElementById('info-panel');
+const infoTitle = document.getElementById('info-panel-title');
+const infoDist = document.getElementById('info-dist');
+const infoCoords = document.getElementById('info-coords');
+const infoDesc = document.getElementById('info-desc');
+const infoDescRow = document.getElementById('info-desc-row');
+const infoUserDistRow = document.getElementById('info-user-dist-row');
+const infoUserDist = document.getElementById('info-user-dist');
+
+function showInfo(p) {
+  activeId = p.id;
+  infoTitle.textContent = p.name;
+  infoDist.textContent = p.isCenter ? 'Reference Center' : `${p.dist.toFixed(2)} km from center`;
+  infoCoords.textContent = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
+  
+  if (p.userDist !== undefined && distanceMode) {
+    infoUserDist.textContent = `${p.userDist.toFixed(2)} km`;
+    infoUserDistRow.style.display = 'flex';
+  } else {
+    infoUserDistRow.style.display = 'none';
+  }
+  
+  if (p.desc && p.desc.trim()) {
+    infoDesc.textContent = p.desc;
+    infoDescRow.style.display = 'flex';
+  } else {
+    infoDescRow.style.display = 'none';
+  }
+  infoPanel.classList.add('visible');
+
+  points.filter(q => q._line).forEach(q => {
+    q._line.setStyle({ color: 'rgba(200,168,75,0.25)', weight: 1, opacity: 0.4 });
+  });
+  if (p._line) {
+    p._line.setStyle({ color: 'rgba(232,201,106,0.9)', weight: 2.5, opacity: 1, dashArray: '8,4' });
+  }
+
+  document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+  const listEl = document.getElementById(`list-item-${p.id}`);
+  if (listEl) {
+    listEl.classList.add('active');
+    listEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function hideInfo() {
+  infoPanel.classList.remove('visible');
+  activeId = null;
+  points.filter(q => q._line).forEach(q => {
+    q._line.setStyle({ color: 'rgba(200,168,75,0.5)', weight: 1.5, opacity: 0.7, dashArray: '5,6' });
+  });
+  document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+}
+
+document.getElementById('info-close').addEventListener('click', hideInfo);
+
+// --- Sidebar Toggle ---
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const sidebarHideBtn = document.getElementById('sidebar-hide-btn');
+
+function hideSidebar() {
+  sidebar.classList.add('hidden');
+  sidebarToggle.classList.add('show');
+}
+
+function showSidebar() {
+  sidebar.classList.remove('hidden');
+  sidebarToggle.classList.remove('show');
+}
+
+sidebarHideBtn.addEventListener('click', hideSidebar);
+sidebarToggle.addEventListener('click', showSidebar);
+
+// --- Locate Me Button ---
+let userMarker = null;
+let userCircle = null;
+
+const locateBtn = document.getElementById('locate-btn');
+
+locateBtn.addEventListener('click', () => {
+  getUserLocation();
+  if (userLocation) {
+    map.flyTo([userLocation.lat, userLocation.lon], 13, { duration: 1.5 });
+  }
+});
+
+// --- Distance Button ---
+document.getElementById('distance-btn').addEventListener('click', toggleDistanceMode);
+
+// --- WhatsApp Modal Logic ---
+const paymentBtn = document.getElementById('payment-btn');
+const paymentModal = document.getElementById('payment-modal');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+
+function togglePayment() {
+  paymentModal.classList.toggle('active');
+}
+
+paymentBtn.addEventListener('click', togglePayment);
+modalCloseBtn.addEventListener('click', togglePayment);
+
+paymentModal.addEventListener('click', (e) => {
+  if (e.target === paymentModal) {
+    togglePayment();
+  }
+});
+</script>
+</body>
+</html>
